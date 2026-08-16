@@ -1,44 +1,51 @@
 import os
-import subprocess
 import time
-import schedule
-import pytz
-from datetime import datetime
+import subprocess
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# Environment Variables से Stream Key उठाएगा
-YOUTUBE_STREAM_KEY = os.environ.get("YOUTUBE_STREAM_KEY")
-RTMP_URL = f"rtmp://a.rtmp.youtube.com/live2/{YOUTUBE_STREAM_KEY}"
-VIDEO_PATH = "videos/stream_video.mp4" # आपकी अपलोड की गई वीडियो
+# Render Port Binding to keep Web Service alive
+class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"YouTube Live Bot is Running!")
 
-def start_stream():
-    print(f"[{datetime.now()}] Live Stream Starting...")
-    
-    # FFmpeg command (Zero Re-encoding - High performance)
-    cmd = [
-        "ffmpeg",
-        "-re",
-        "-stream_loop", "-1",  # 8 घंटे तक वीडियो लूप में चलेगी
-        "-i", VIDEO_PATH,
-        "-c:v", "copy",
-        "-c:a", "copy",
-        "-f", "flv",
-        RTMP_URL
-    ]
-    
-    # 8 घंटे (28,800 सेकंड) तक चलाकर प्रोसेस बंद करेगा
-    process = subprocess.Popen(cmd)
-    time.sleep(28800) # 8 घंटे = 8 * 3600 sec
-    process.terminate()
-    print(f"[{datetime.now()}] Live Stream Stopped Automatically.")
+def run_web_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), SimpleHTTPRequestHandler)
+    server.serve_forever()
 
-# IST (India Time) सेट करना
-tz = pytz.timezone('Asia/Kolkata')
+# Start HTTP Server in background thread
+threading.Thread(target=run_web_server, daemon=True).start()
 
-# रोज़ सुबह 9 बजे Start और शाम 5 बजे (8 घंटे बाद) Stop
-schedule.every().day.at("09:00").do(start_stream)
+# YouTube Streaming Logic
+STREAM_KEY = os.environ.get("YOUTUBE_STREAM_KEY")
+VIDEO_FILE = "stream_video.mp4"
 
-print("Bot is active and waiting for schedule (09:00 AM IST)...")
+if not STREAM_KEY:
+    print("Error: YOUTUBE_STREAM_KEY is missing!")
+    exit(1)
 
-while True:
-    schedule.run_pending()
-    time.sleep(30)
+rtmp_url = f"rtmp://a.rtmp.youtube.com/live2/{STREAM_KEY}"
+
+ffmpeg_cmd = [
+    'ffmpeg',
+    '-re',
+    '-stream_loop', '-1',
+    '-i', VIDEO_FILE,
+    '-c:v', 'libx264',
+    '-preset', 'veryfast',
+    '-maxrate', '3000k',
+    '-bufsize', '6000k',
+    '-pix_fmt', 'yuv420p',
+    '-g', '50',
+    '-c:a', 'aac',
+    '-b:a', '128k',
+    '-ar', '44100',
+    '-f', 'flv',
+    rtmp_url
+]
+
+print("Starting Live Stream...")
+subprocess.run(ffmpeg_cmd)
