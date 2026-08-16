@@ -4,7 +4,7 @@ import subprocess
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# Render Port Binding to keep Web Service alive
+# 1. Render Port Binding to keep Web Service alive
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -14,19 +14,27 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 def run_web_server():
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(('0.0.0.0', port), SimpleHTTPRequestHandler)
+    print(f"Web server started on port {port}")
     server.serve_forever()
 
-# Start HTTP Server in background thread
+# Start HTTP Web Server in background thread immediately
 threading.Thread(target=run_web_server, daemon=True).start()
 
-# YouTube Streaming Logic
+# 2. Check Stream Key and Video File
 STREAM_KEY = os.environ.get("YOUTUBE_STREAM_KEY")
 VIDEO_FILE = "stream_video.mp4"
 
 if not STREAM_KEY:
-    print("Error: YOUTUBE_STREAM_KEY is missing!")
-    exit(1)
+    print("Error: YOUTUBE_STREAM_KEY environment variable is missing!")
+    while True:
+        time.sleep(60)
 
+if not os.path.exists(VIDEO_FILE):
+    print(f"Error: File '{VIDEO_FILE}' missing in root directory!")
+    while True:
+        time.sleep(60)
+
+# 3. Start Live Streaming Loop
 rtmp_url = f"rtmp://a.rtmp.youtube.com/live2/{STREAM_KEY}"
 
 ffmpeg_cmd = [
@@ -48,4 +56,10 @@ ffmpeg_cmd = [
 ]
 
 print("Starting Live Stream...")
-subprocess.run(ffmpeg_cmd)
+process = subprocess.run(ffmpeg_cmd)
+
+# If FFmpeg crashes or fails, keep container alive to read logs
+if process.returncode != 0:
+    print(f"FFmpeg exited with error code {process.returncode}")
+    while True:
+        time.sleep(60)
