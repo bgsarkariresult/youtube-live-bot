@@ -4,12 +4,17 @@ import subprocess
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# 1. Render Port Binding to keep Web Service alive
+# 1. Web Server Handlers for Render Health Check
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
+        self.send_header('Content-type', 'text/html')
         self.end_headers()
         self.wfile.write(b"YouTube Live Bot is Running!")
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
 
 def run_web_server():
     port = int(os.environ.get("PORT", 8080))
@@ -17,49 +22,52 @@ def run_web_server():
     print(f"Web server started on port {port}")
     server.serve_forever()
 
-# Start HTTP Web Server in background thread immediately
-threading.Thread(target=run_web_server, daemon=True).start()
+def start_streaming():
+    STREAM_KEY = os.environ.get("YOUTUBE_STREAM_KEY")
+    VIDEO_FILE = "stream_video.mp4"
 
-# 2. Check Stream Key and Video File
-STREAM_KEY = os.environ.get("YOUTUBE_STREAM_KEY")
-VIDEO_FILE = "stream_video.mp4"
+    if not STREAM_KEY:
+        print("CRITICAL ERROR: YOUTUBE_STREAM_KEY Environment Variable is missing in Render!")
+        return
 
-if not STREAM_KEY:
-    print("Error: YOUTUBE_STREAM_KEY environment variable is missing!")
+    if not os.path.exists(VIDEO_FILE):
+        print(f"CRITICAL ERROR: File '{VIDEO_FILE}' missing in repository root!")
+        return
+
+    rtmp_url = f"rtmp://a.rtmp.youtube.com/live2/{STREAM_KEY}"
+
+    ffmpeg_cmd = [
+        'ffmpeg',
+        '-re',
+        '-stream_loop', '-1',
+        '-i', VIDEO_FILE,
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-b:v', '2500k',
+        '-maxrate', '3000k',
+        '-bufsize', '6000k',
+        '-pix_fmt', 'yuv420p',
+        '-g', '50',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-ar', '44100',
+        '-f', 'flv',
+        rtmp_url
+    ]
+
+    # Infinite Auto-Restart Loop
     while True:
-        time.sleep(60)
+        print("Starting FFmpeg Live Streaming...")
+        process = subprocess.Popen(ffmpeg_cmd)
+        process.wait()
+        print(f"FFmpeg stopped (Exit Code: {process.returncode}). Reconnecting in 5 seconds...")
+        time.sleep(5)
 
-if not os.path.exists(VIDEO_FILE):
-    print(f"Error: File '{VIDEO_FILE}' missing in root directory!")
-    while True:
-        time.sleep(60)
+if __name__ == '__main__':
+    # Start Live Streaming in Background Thread
+    stream_thread = threading.Thread(target=start_streaming)
+    stream_thread.daemon = True
+    stream_thread.start()
 
-# 3. Start Live Streaming Loop
-rtmp_url = f"rtmp://a.rtmp.youtube.com/live2/{STREAM_KEY}"
-
-ffmpeg_cmd = [
-    'ffmpeg',
-    '-re',
-    '-stream_loop', '-1',
-    '-i', VIDEO_FILE,
-    '-c:v', 'libx264',
-    '-preset', 'veryfast',
-    '-maxrate', '3000k',
-    '-bufsize', '6000k',
-    '-pix_fmt', 'yuv420p',
-    '-g', '50',
-    '-c:a', 'aac',
-    '-b:a', '128k',
-    '-ar', '44100',
-    '-f', 'flv',
-    rtmp_url
-]
-
-print("Starting Live Stream...")
-process = subprocess.run(ffmpeg_cmd)
-
-# If FFmpeg crashes or fails, keep container alive to read logs
-if process.returncode != 0:
-    print(f"FFmpeg exited with error code {process.returncode}")
-    while True:
-        time.sleep(60)
+    # Run HTTP Server in Main Thread
+    run_web_server()
