@@ -1,4 +1,5 @@
 import os
+import glob
 import time
 import subprocess
 from flask import Flask
@@ -14,6 +15,20 @@ def run_flask():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
+def generate_playlist():
+    """ऑटोमैटिक सभी .mp4 फ़ाइलों को ढूँढकर list.txt तैयार करेगा"""
+    video_files = sorted(glob.glob("*.mp4"))
+    if not video_files:
+        print("ERROR: No .mp4 files found in repository!", flush=True)
+        return False
+    
+    with open("list.txt", "w") as f:
+        for video in video_files:
+            f.write(f"file '{video}'\n")
+            
+    print(f"Generated playlist with {len(video_files)} videos: {video_files}", flush=True)
+    return True
+
 def start_streaming():
     yt_key = os.environ.get("YT_STREAM_KEY")
     fb_key = os.environ.get("FB_STREAM_KEY")
@@ -26,10 +41,15 @@ def start_streaming():
         return
 
     while True:
+        # 1. लिस्ट तैयार करें
+        if not generate_playlist():
+            time.sleep(10)
+            continue
+
         print("Starting FFmpeg Live Streaming...", flush=True)
 
         # -------------------------------------------------------------
-        # CASE 1: Keval YouTube Par Chalana Ho (Best Performance - 1080p Copy)
+        # CASE 1: Keval YouTube Par Chalana Ho (1080p Copy Mode)
         # -------------------------------------------------------------
         if yt_url and not fb_url:
             print("Mode: YouTube ONLY (High Speed Direct Pass-through)", flush=True)
@@ -40,14 +60,14 @@ def start_streaming():
                 '-safe', '0',
                 '-stream_loop', '-1',
                 '-i', 'list.txt',
-                '-c:v', 'copy',          # Zero CPU Load
-                '-c:a', 'copy',          # Zero CPU Load
+                '-c:v', 'copy',
+                '-c:a', 'copy',
                 '-f', 'flv',
                 yt_url
             ]
 
         # -------------------------------------------------------------
-        # CASE 2: Keval Facebook Par Chalana Ho (Facebook Compatible 720p)
+        # CASE 2: Keval Facebook Par Chalana Ho (Facebook 720p)
         # -------------------------------------------------------------
         elif fb_url and not yt_url:
             print("Mode: Facebook ONLY (Optimized 720p)", flush=True)
