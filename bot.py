@@ -52,7 +52,7 @@ def start_streaming():
     if not prepare_playlist():
         return
 
-    # Base FFmpeg command
+    # Base FFmpeg command with Bitstream Filter fix
     ffmpeg_cmd = [
         'ffmpeg',
         '-re',
@@ -60,8 +60,9 @@ def start_streaming():
         '-safe', '0',
         '-stream_loop', '-1',
         '-i', 'list.txt',
-        '-c:v', 'copy',      # Video re-encode nahi hoga
-        '-c:a', 'aac',       # Audio AAC rahega (Facebook & YT dono ke liye best)
+        '-c:v', 'copy',                   # Re-encode nahi hoga (Fast speed)
+        '-bsf:v', 'h264_mp4toannexb',      # FLV / RTMP Header Fix (Sabse zaroori)
+        '-c:a', 'aac',                    # Audio AAC
         '-b:a', '128k',
         '-ar', '44100'
     ]
