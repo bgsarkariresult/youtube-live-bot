@@ -34,7 +34,7 @@ def start_streaming():
     fb_key = os.environ.get("FB_STREAM_KEY")
 
     yt_url = f"rtmp://a.rtmp.youtube.com/live2/{yt_key}" if yt_key else None
-    fb_url = f"rtmps://live-api-s.facebook.com:443/rtmp/{fb_key}" if fb_key else None
+    fb_url = f"rtmps://live-api-s.facebook.com:443/rtmp/{fb_key}?tls_verify=0" if fb_key else None
 
     if not yt_url and not fb_url:
         print("ERROR: Neither YT_STREAM_KEY nor FB_STREAM_KEY is set in Environment Variables!")
