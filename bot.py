@@ -67,10 +67,10 @@ def start_streaming():
             ]
 
         # -------------------------------------------------------------
-        # CASE 2: Keval Facebook Par Chalana Ho (Zero CPU Copy Mode)
+        # CASE 2: Keval Facebook Par Chalana Ho (Fixed Keyframe 2s)
         # -------------------------------------------------------------
         elif fb_url and not yt_url:
-            print("Mode: Facebook ONLY (Ultra-Fast Copy Mode)", flush=True)
+            print("Mode: Facebook ONLY (Optimized Keyframe Rate)", flush=True)
             ffmpeg_cmd = [
                 'ffmpeg',
                 '-re',
@@ -78,9 +78,19 @@ def start_streaming():
                 '-safe', '0',
                 '-stream_loop', '-1',
                 '-i', 'list.txt',
-                '-c:v', 'copy',            # Zero CPU Load - Original Bitrate & FPS
-                '-c:a', 'copy',            # Zero CPU Load
-                '-bsf:v', 'h264_mp4toannexb', # Fixes Facebook FLV stream compatibility
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                '-tune', 'zerolatency',
+                '-g', '48',                   # Force keyframe every 48 frames (2 seconds at 24fps)
+                '-keyint_min', '48',          # Minimum keyframe interval
+                '-sc_threshold', '0',         # Disable scene change detection to keep 2s interval exact
+                '-b:v', '2000k',
+                '-maxrate', '2500k',
+                '-bufsize', '4000k',
+                '-pix_fmt', 'yuv420p',
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                '-ar', '44100',
                 '-f', 'flv',
                 fb_url
             ]
