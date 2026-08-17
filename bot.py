@@ -51,7 +51,7 @@ def start_streaming():
     yt_url = f"rtmp://a.rtmp.youtube.com/live2/{YT_KEY}" if YT_KEY else None
     fb_url = f"rtmps://live-api-s.facebook.com:443/rtmp/{FB_KEY}" if FB_KEY else None
 
-# High Speed Direct Pass-through (0% CPU Load)
+# Optimized FFmpeg Settings - Fixes FLV Tag Error & Low CPU Load
     ffmpeg_cmd = [
         'ffmpeg',
         '-re',
@@ -59,10 +59,19 @@ def start_streaming():
         '-safe', '0',
         '-stream_loop', '-1',
         '-i', 'list.txt',
-        '-c:v', 'copy',        # Direct Copy (No Re-encoding, 0% CPU)
-        '-c:a', 'copy',        # Direct Audio Copy
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-tune', 'zerolatency',
+        '-profile:v', 'baseline',      # RTMP streaming compatibility
+        '-b:v', '1500k',               # Stable Bitrate (No buffering)
+        '-maxrate', '1800k',
+        '-bufsize', '3000k',
+        '-g', '48',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-ar', '44100'
     ]
-
     if yt_url and fb_url:
         print("Streaming to BOTH YouTube and Facebook...", flush=True)
         tee_map = f"[f=flv]{yt_url}|[f=flv]{fb_url}"
