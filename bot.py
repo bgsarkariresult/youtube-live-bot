@@ -5,7 +5,6 @@ import threading
 import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# Terminal output unbuffer karne ke liye
 sys.stdout.reconfigure(line_buffering=True)
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -13,7 +12,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', 'text/html')
         self.end_headers()
-        self.wfile.write(b"YouTube Live Bot is Running!")
+        self.wfile.write(b"YouTube Live Bot is Active!")
 
     def do_HEAD(self):
         self.send_response(200)
@@ -27,30 +26,28 @@ def run_web_server():
 
 def start_streaming():
     STREAM_KEY = os.environ.get("YOUTUBE_STREAM_KEY")
+    if STREAM_KEY:
+        STREAM_KEY = STREAM_KEY.strip() # Extra space hatane ke liye
+
     VIDEO_FILE = "stream_video.mp4"
 
     if not STREAM_KEY:
-        print("CRITICAL ERROR: YOUTUBE_STREAM_KEY Environment Variable is missing in Render!", flush=True)
+        print("CRITICAL ERROR: YOUTUBE_STREAM_KEY missing!", flush=True)
         return
 
     if not os.path.exists(VIDEO_FILE):
-        print(f"CRITICAL ERROR: File '{VIDEO_FILE}' missing in repository root!", flush=True)
+        print(f"CRITICAL ERROR: File '{VIDEO_FILE}' missing!", flush=True)
         return
 
     rtmp_url = f"rtmp://a.rtmp.youtube.com/live2/{STREAM_KEY}"
 
+    # Ultrafast & Low CPU FFmpeg Command
     ffmpeg_cmd = [
         'ffmpeg',
         '-re',
         '-stream_loop', '-1',
         '-i', VIDEO_FILE,
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-b:v', '2500k',
-        '-maxrate', '3000k',
-        '-bufsize', '6000k',
-        '-pix_fmt', 'yuv420p',
-        '-g', '50',
+        '-c:v', 'copy',        # Re-encode nahi karega, fast stream hoga
         '-c:a', 'aac',
         '-b:a', '128k',
         '-ar', '44100',
