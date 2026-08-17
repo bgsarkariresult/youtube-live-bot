@@ -2,9 +2,12 @@ import os
 import time
 import subprocess
 import threading
+import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# 1. Web Server Handlers for Render Health Check
+# Terminal output unbuffer karne ke liye
+sys.stdout.reconfigure(line_buffering=True)
+
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -19,7 +22,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 def run_web_server():
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(('0.0.0.0', port), SimpleHTTPRequestHandler)
-    print(f"Web server started on port {port}")
+    print(f"Web server started on port {port}", flush=True)
     server.serve_forever()
 
 def start_streaming():
@@ -27,11 +30,11 @@ def start_streaming():
     VIDEO_FILE = "stream_video.mp4"
 
     if not STREAM_KEY:
-        print("CRITICAL ERROR: YOUTUBE_STREAM_KEY Environment Variable is missing in Render!")
+        print("CRITICAL ERROR: YOUTUBE_STREAM_KEY Environment Variable is missing in Render!", flush=True)
         return
 
     if not os.path.exists(VIDEO_FILE):
-        print(f"CRITICAL ERROR: File '{VIDEO_FILE}' missing in repository root!")
+        print(f"CRITICAL ERROR: File '{VIDEO_FILE}' missing in repository root!", flush=True)
         return
 
     rtmp_url = f"rtmp://a.rtmp.youtube.com/live2/{STREAM_KEY}"
@@ -55,19 +58,16 @@ def start_streaming():
         rtmp_url
     ]
 
-    # Infinite Auto-Restart Loop
     while True:
-        print("Starting FFmpeg Live Streaming...")
+        print("Starting FFmpeg Live Streaming...", flush=True)
         process = subprocess.Popen(ffmpeg_cmd)
         process.wait()
-        print(f"FFmpeg stopped (Exit Code: {process.returncode}). Reconnecting in 5 seconds...")
+        print(f"FFmpeg stopped (Exit Code: {process.returncode}). Reconnecting in 5 seconds...", flush=True)
         time.sleep(5)
 
 if __name__ == '__main__':
-    # Start Live Streaming in Background Thread
     stream_thread = threading.Thread(target=start_streaming)
     stream_thread.daemon = True
     stream_thread.start()
 
-    # Run HTTP Server in Main Thread
     run_web_server()
