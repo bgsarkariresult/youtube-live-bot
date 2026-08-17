@@ -52,7 +52,10 @@ def start_streaming():
     if not prepare_playlist():
         return
 
-    # Base FFmpeg command with Bitstream Filter fix
+    yt_url = f"rtmp://a.rtmp.youtube.com/live2/{YT_KEY}" if YT_KEY else None
+    fb_url = f"rtmps://live-api-s.facebook.com:443/rtmp/{FB_KEY}" if FB_KEY else None
+
+    # Base FFmpeg command with fast re-encoding
     ffmpeg_cmd = [
         'ffmpeg',
         '-re',
@@ -60,19 +63,22 @@ def start_streaming():
         '-safe', '0',
         '-stream_loop', '-1',
         '-i', 'list.txt',
-        '-c:v', 'copy',                   # Re-encode nahi hoga (Fast speed)
-        '-bsf:v', 'h264_mp4toannexb',      # FLV / RTMP Header Fix (Sabse zaroori)
-        '-c:a', 'aac',                    # Audio AAC
+        '-c:v', 'libx264',             # Re-encode video reliably
+        '-preset', 'ultrafast',        # Lowest CPU usage
+        '-tune', 'zerolatency',
+        '-g', '48',                    # Keyframe interval (2 sec for 24fps)
+        '-b:v', '1500k',               # Bitrate for smooth streaming
+        '-maxrate', '1500k',
+        '-bufsize', '3000k',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
         '-b:a', '128k',
         '-ar', '44100'
     ]
 
-    yt_url = f"rtmp://a.rtmp.youtube.com/live2/{YT_KEY}" if YT_KEY else None
-    fb_url = f"rtmps://live-api-s.facebook.com:443/rtmp/{FB_KEY}" if FB_KEY else None
-
-    # Agar YouTube aur Facebook DONO me live karna hai
+    # Stream to both or single platform
     if yt_url and fb_url:
-        print("Streaming to BOTH YouTube and Facebook using Tee Muxer...", flush=True)
+        print("Streaming to BOTH YouTube and Facebook...", flush=True)
         tee_map = f"[f=flv]{yt_url}|[f=flv]{fb_url}"
         ffmpeg_cmd.extend(['-f', 'tee', '-map', '0:v', '-map', '0:a', tee_map])
     elif yt_url:
