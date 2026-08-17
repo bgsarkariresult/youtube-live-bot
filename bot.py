@@ -55,7 +55,7 @@ def start_streaming():
     yt_url = f"rtmp://a.rtmp.youtube.com/live2/{YT_KEY}" if YT_KEY else None
     fb_url = f"rtmps://live-api-s.facebook.com:443/rtmp/{FB_KEY}" if FB_KEY else None
 
-    # Base FFmpeg command with fast re-encoding
+    # High-Performance FFmpeg settings for Render Free Tier
     ffmpeg_cmd = [
         'ffmpeg',
         '-re',
@@ -63,19 +63,19 @@ def start_streaming():
         '-safe', '0',
         '-stream_loop', '-1',
         '-i', 'list.txt',
-        '-c:v', 'libx264',             # Re-encode video reliably
-        '-preset', 'ultrafast',        # Lowest CPU usage
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',        # CPU पर 0% लोड
         '-tune', 'zerolatency',
-        '-g', '48',                    # Keyframe interval (2 sec for 24fps)
-        '-b:v', '1500k',               # Bitrate for smooth streaming
-        '-maxrate', '1500k',
-        '-bufsize', '3000k',
+        '-b:v', '1000k',               # Bitrate 1000k करने से बफरिंग खत्म हो जाएगी
+        '-maxrate', '1200k',
+        '-bufsize', '2000k',
+        '-g', '48',                    # Keyframe interval (2 sec)
         '-pix_fmt', 'yuv420p',
         '-c:a', 'aac',
-        '-b:a', '128k',
+        '-b:a', '96k',                 # Light audio bitrate
         '-ar', '44100'
     ]
-
+    
     # Stream to both or single platform
     if yt_url and fb_url:
         print("Streaming to BOTH YouTube and Facebook...", flush=True)
