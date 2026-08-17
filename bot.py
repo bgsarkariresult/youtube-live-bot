@@ -26,16 +26,12 @@ def run_web_server():
     server.serve_forever()
 
 def prepare_playlist():
-    # .mp4 वाली सभी फ़ाइलों को ढूँढता है (उदा: video1.mp4, video2.mp4 या stream_video.mp4)
     video_files = sorted(glob.glob("*.mp4"))
-    
     if not video_files:
-        print("CRITICAL ERROR: No .mp4 video files found in the directory!", flush=True)
+        print("CRITICAL ERROR: No .mp4 video files found!", flush=True)
         return False
 
     print(f"Found {len(video_files)} video(s): {', '.join(video_files)}", flush=True)
-
-    # list.txt फ़ाइल तैयार करता है (FFmpeg concat के लिए)
     with open("list.txt", "w") as f:
         for video in video_files:
             f.write(f"file '{video}'\n")
@@ -46,7 +42,7 @@ def start_streaming():
     FB_KEY = os.environ.get("FB_STREAM_KEY", "").strip()
 
     if not YT_KEY and not FB_KEY:
-        print("CRITICAL ERROR: Neither YOUTUBE_STREAM_KEY nor FB_STREAM_KEY is provided!", flush=True)
+        print("CRITICAL ERROR: No stream keys provided!", flush=True)
         return
 
     if not prepare_playlist():
@@ -55,7 +51,7 @@ def start_streaming():
     yt_url = f"rtmp://a.rtmp.youtube.com/live2/{YT_KEY}" if YT_KEY else None
     fb_url = f"rtmps://live-api-s.facebook.com:443/rtmp/{FB_KEY}" if FB_KEY else None
 
-    # High-Performance FFmpeg settings for Render Free Tier
+    # Ultra-light FFmpeg Settings for Render Free Tier
     ffmpeg_cmd = [
         'ffmpeg',
         '-re',
@@ -64,19 +60,18 @@ def start_streaming():
         '-stream_loop', '-1',
         '-i', 'list.txt',
         '-c:v', 'libx264',
-        '-preset', 'ultrafast',        # CPU पर 0% लोड
+        '-preset', 'ultrafast',        # 0% CPU Load
         '-tune', 'zerolatency',
-        '-b:v', '1000k',               # Bitrate 1000k करने से बफरिंग खत्म हो जाएगी
-        '-maxrate', '1200k',
-        '-bufsize', '2000k',
-        '-g', '48',                    # Keyframe interval (2 sec)
+        '-b:v', '900k',                # Low Bitrate (Smooth Network Push)
+        '-maxrate', '1000k',
+        '-bufsize', '1500k',
+        '-g', '48',
         '-pix_fmt', 'yuv420p',
         '-c:a', 'aac',
-        '-b:a', '96k',                 # Light audio bitrate
+        '-b:a', '96k',
         '-ar', '44100'
     ]
-    
-    # Stream to both or single platform
+
     if yt_url and fb_url:
         print("Streaming to BOTH YouTube and Facebook...", flush=True)
         tee_map = f"[f=flv]{yt_url}|[f=flv]{fb_url}"
