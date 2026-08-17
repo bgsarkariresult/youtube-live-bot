@@ -51,7 +51,7 @@ def start_streaming():
     yt_url = f"rtmp://a.rtmp.youtube.com/live2/{YT_KEY}" if YT_KEY else None
     fb_url = f"rtmps://live-api-s.facebook.com:443/rtmp/{FB_KEY}" if FB_KEY else None
 
-    # Ultra-light FFmpeg Settings for Render Free Tier
+# High Speed Direct Pass-through (0% CPU Load)
     ffmpeg_cmd = [
         'ffmpeg',
         '-re',
@@ -59,17 +59,8 @@ def start_streaming():
         '-safe', '0',
         '-stream_loop', '-1',
         '-i', 'list.txt',
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',        # 0% CPU Load
-        '-tune', 'zerolatency',
-        '-b:v', '900k',                # Low Bitrate (Smooth Network Push)
-        '-maxrate', '1000k',
-        '-bufsize', '1500k',
-        '-g', '48',
-        '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac',
-        '-b:a', '96k',
-        '-ar', '44100'
+        '-c:v', 'copy',        # Direct Copy (No Re-encoding, 0% CPU)
+        '-c:a', 'copy',        # Direct Audio Copy
     ]
 
     if yt_url and fb_url:
