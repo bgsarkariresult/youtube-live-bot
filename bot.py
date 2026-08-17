@@ -67,10 +67,10 @@ def start_streaming():
             ]
 
         # -------------------------------------------------------------
-        # CASE 2: Keval Facebook Par Chalana Ho (Facebook 720p)
+        # CASE 2: Keval Facebook Par Chalana Ho (Zero CPU Copy Mode)
         # -------------------------------------------------------------
         elif fb_url and not yt_url:
-            print("Mode: Facebook ONLY (Optimized 720p)", flush=True)
+            print("Mode: Facebook ONLY (Ultra-Fast Copy Mode)", flush=True)
             ffmpeg_cmd = [
                 'ffmpeg',
                 '-re',
@@ -78,18 +78,9 @@ def start_streaming():
                 '-safe', '0',
                 '-stream_loop', '-1',
                 '-i', 'list.txt',
-                '-c:v', 'libx264',
-                '-preset', 'ultrafast',
-                '-tune', 'zerolatency',
-                '-vf', 'scale=1280:720',
-                '-b:v', '2000k',
-                '-maxrate', '2500k',
-                '-bufsize', '4000k',
-                '-g', '48',
-                '-pix_fmt', 'yuv420p',
-                '-c:a', 'aac',
-                '-b:a', '128k',
-                '-ar', '44100',
+                '-c:v', 'copy',            # Zero CPU Load - Original Bitrate & FPS
+                '-c:a', 'copy',            # Zero CPU Load
+                '-bsf:v', 'h264_mp4toannexb', # Fixes Facebook FLV stream compatibility
                 '-f', 'flv',
                 fb_url
             ]
