@@ -1,10 +1,38 @@
 {
   "_help": "हर चैनल की 'videos' लिस्ट में YouTube वीडियो के लिंक डालें (या इसी repo की mp4 फ़ाइल का नाम, जैसे video1.mp4). जिस चैनल की लिस्ट खाली है, उसकी live stream शुरू नहीं होगी. Stream key GitHub Secrets में रहती है: YT_STREAM_KEY_1..5 और FB_STREAM_KEY_1..5",
   "channels": [
-    { "id": 1, "name": "Channel 1", "videos": [] },
-    { "id": 2, "name": "Channel 2", "videos": [] },
-    { "id": 3, "name": "Channel 3", "videos": [] },
-    { "id": 4, "name": "Channel 4", "videos": [] },
-    { "id": 5, "name": "Channel 5", "videos": [] }
+    {
+      "id": 1,
+      "name": "Channel 1",
+      "videos": []
+    },
+    {
+      "id": 2,
+      "name": "Channel 2",
+      "videos": [
+        "https://youtu.be/OuAZ-WbEo-4?si=6V1OUIfUS87sXpTv",
+        "https://youtu.be/rvqSTc5qjc0?si=R8OwMnfD4VeBu5LE",
+        "https://youtu.be/a-kuHGBO0_s?si=wBFqjW_8yJnPQjch",
+        "https://youtu.be/mPUI5pU_uhg?si=0-DE6B5Khowwf3-G",
+        "https://youtu.be/uGTUxVwO3qg?si=Hdiy6iUYugk1gEaC",
+        "https://youtu.be/JiYmW6W_1HQ?si=XCaKTNeYakcYObZJ",
+        "https://youtu.be/3Ry2Y_1kfgE?si=mtLJI4wqx8lkvHat"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Channel 3",
+      "videos": []
+    },
+    {
+      "id": 4,
+      "name": "Channel 4",
+      "videos": []
+    },
+    {
+      "id": 5,
+      "name": "Channel 5",
+      "videos": []
+    }
   ]
 }
