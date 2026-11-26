@@ -168,12 +168,38 @@ def ytdlp_supports(flag):
     return flag in (r.stdout or "")
 
 
+VIDEO_EXT = (".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi")
+
+
+def is_direct_file(src):
+    """सीधी वीडियो-फ़ाइल का लिंक (जैसे GitHub Release / Drive-free hosting), YouTube नहीं."""
+    from urllib.parse import urlparse
+    path = urlparse(src).path.lower()
+    return path.endswith(VIDEO_EXT)
+
+
+def download_direct(src, raw_dir, idx):
+    import urllib.request
+    from urllib.parse import urlparse
+    ext = Path(urlparse(src).path).suffix or ".mp4"
+    dst = raw_dir / f"{idx:03d}{ext}"
+    req = urllib.request.Request(src, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=60) as resp, open(dst, "wb") as fh:
+        shutil.copyfileobj(resp, fh, length=1024 * 1024)
+    if dst.stat().st_size < 1024:
+        raise RuntimeError("डाउनलोड की गई फ़ाइल बहुत छोटी है (लिंक सार्वजनिक है?)")
+    return dst
+
+
 def download(src, raw_dir, idx):
     if not src.startswith(("http://", "https://")):
         p = local_path(src)
         if not p.exists():
             raise RuntimeError(f"फ़ाइल नहीं मिली: {src}")
         return p
+
+    if is_direct_file(src):
+        return download_direct(src, raw_dir, idx)
 
     cmd = ["yt-dlp", "--no-playlist", "--no-progress", "--retries", "5",
            "-f", "bv*[height<=720]+ba/b[height<=720]/b",

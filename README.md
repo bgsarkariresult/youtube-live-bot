@@ -38,6 +38,13 @@
 - दूसरों की वीडियो बार-बार लूप करने से YouTube की "reused content" नीति में दिक्कत आ सकती है। अपनी वीडियो इस्तेमाल करें।
 - एक ही चैनल का दोहरा run अपने-आप रोक दिया जाता है (एक key पर दो stream नहीं चल सकतीं)।
 
+## "Sign in to confirm you're not a bot" (YouTube download block)
+GitHub के servers का IP YouTube अक्सर block कर देता है, तब लिंक से वीडियो डाउनलोड नहीं होती. दो रास्ते:
+
+1. **सीधी mp4 का लिंक (सबसे भरोसेमंद)**: वीडियो अपने कंप्यूटर पर डाउनलोड करके GitHub **Releases** में attach करें (हर फ़ाइल 2 GB तक), और उसका `.../releases/download/.../video.mp4` लिंक Set Videos में डालें. `.mp4/.mov/.mkv/.webm` पर खत्म होने वाले सीधे लिंक सीधे डाउनलोड होते हैं, YouTube की जाँच नहीं लगती.
+   (Private repo की Release का लिंक बिना login नहीं खुलता, इसलिए repo public हो या लिंक सार्वजनिक जगह का हो.)
+2. **`YT_COOKIES` secret**: browser में YouTube पर login करके "Get cookies.txt LOCALLY" जैसे extension से `youtube.com` की cookies.txt export करें और उसकी पूरी सामग्री `YT_COOKIES` secret में डालें. यह हर बार काम करने की गारंटी नहीं है, cookies समय के साथ खत्म होती हैं, और मुख्य अकाउंट की जगह अलग अकाउंट इस्तेमाल करना बेहतर है.
+
 ## फ़ाइलें
 - `channels.json` — चैनल और वीडियो की सूची
 - `.github/workflows/set-videos.yml` — Actions से लिंक जोड़ने/बदलने का workflow
