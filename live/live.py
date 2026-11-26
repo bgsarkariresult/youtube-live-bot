@@ -9,6 +9,7 @@ Subcommands:
   wait-prev  पिछला 6-घंटे वाला session खत्म होने तक रुकना (handoff)
   stream     ffmpeg से YouTube + Facebook पर एक साथ live भेजना
   watchdog   जो चैनल नहीं चल रहा उसे दोबारा शुरू करना
+  set-videos Actions से किसी चैनल की वीडियो-लिंक जोड़ना/बदलना/हटाना
 
 सिर्फ standard library इस्तेमाल होती है. बाहर से चाहिए: ffmpeg, ffprobe, yt-dlp, gh.
 """
@@ -409,6 +410,47 @@ def cmd_stream(a):
     log("Session पूरा हुआ.")
 
 
+# --------------------------------------------------------------- set-videos
+
+def cmd_set_videos(a):
+    """Actions से लिंक जोड़ना/बदलना/हटाना (channels.json बदलता है)."""
+    import re
+    tokens = re.split(r"[\s,;]+", os.environ.get("VIDEO_LINKS", "").strip())
+    links = []
+    for t in tokens:
+        t = t.strip().strip("<>\"'")
+        if not t:
+            continue
+        if t.startswith(("http://", "https://")) or t.lower().endswith(".mp4"):
+            if t not in links:
+                links.append(t)
+        else:
+            log(f"WARNING: '{t}' लिंक नहीं लगा, छोड़ दिया.")
+
+    data = json.loads(CONFIG.read_text(encoding="utf-8"))
+    chans = {int(c["id"]): c for c in data["channels"]}
+    if a.channel not in chans:
+        sys.exit(f"ERROR: channel {a.channel} channels.json में नहीं है (1 से {len(chans)} चुनें).")
+    ch = chans[a.channel]
+    old = list(ch.get("videos", []))
+
+    if a.mode == "clear":
+        new = []
+    else:
+        if not links:
+            sys.exit("ERROR: कोई सही लिंक नहीं मिला. https:// वाले लिंक डालें.")
+        if a.mode == "replace":
+            new = links
+        else:  # add
+            new = old + [l for l in links if l not in old]
+
+    ch["videos"] = new
+    CONFIG.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    log(f"Channel {a.channel}: पहले {len(old)} वीडियो, अब {len(new)} वीडियो.")
+    for i, v in enumerate(new, 1):
+        log(f"  {i}. {v}")
+
+
 # ------------------------------------------------------------------ watchdog
 
 def cmd_watchdog(a):
@@ -442,6 +484,8 @@ def main():
 
     add("plan", cmd_plan, channel_type=str)
     add("key", cmd_key)
+    sp = add("set-videos", cmd_set_videos)
+    sp.add_argument("--mode", choices=["add", "replace", "clear"], default="add")
     add("guard", cmd_guard)
     add("prepare", cmd_prepare)
     add("wait-prev", cmd_wait_prev)

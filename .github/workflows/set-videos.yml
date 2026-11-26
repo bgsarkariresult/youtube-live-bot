@@ -1,0 +1,61 @@
+name: Set Videos
+
+# चैनल की वीडियो-लिंक यहीं से जोड़ें/बदलें/हटाएँ; channels.json अपने-आप बदल जाती है.
+# Actions -> Set Videos -> Run workflow
+# लिंक जितने चाहें डालें (कॉमा, space या नई लाइन से अलग करके).
+# नई लिस्ट चल रहे session में नहीं, अगले session (handoff) से लागू होती है.
+
+run-name: "Set Videos: channel ${{ inputs.channel }} (${{ inputs.mode }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "चैनल नंबर (1 से 5)"
+        type: choice
+        options: ["1", "2", "3", "4", "5"]
+        required: true
+      mode:
+        description: "add = जोड़ें | replace = पूरी लिस्ट बदलें | clear = सब हटाएँ"
+        type: choice
+        options: ["add", "replace", "clear"]
+        default: "add"
+        required: true
+      links:
+        description: "YouTube लिंक (कॉमा या space से अलग, कितने भी)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: set-videos
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update channels.json
+        env:
+          VIDEO_LINKS: ${{ inputs.links }}
+        run: python3 live/live.py set-videos --channel "${{ inputs.channel }}" --mode "${{ inputs.mode }}"
+
+      - name: Commit
+        run: |
+          if git diff --quiet channels.json; then
+            echo "कोई बदलाव नहीं."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add channels.json
+          git commit -m "Set videos: channel ${{ inputs.channel }} (${{ inputs.mode }})"
+          for i in 1 2 3; do
+            git push && exit 0
+            git pull --rebase
+          done
+          exit 1

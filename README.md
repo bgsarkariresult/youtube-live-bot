@@ -20,7 +20,12 @@
 
    जिस चैनल की कोई एक key न हो, वह सिर्फ़ दूसरे platform पर चलेगा।
 
-2. **वीडियो**: `channels.json` में हर चैनल की `videos` लिस्ट में YouTube वीडियो के लिंक डालें (या इसी repo की mp4 फ़ाइल का नाम, जैसे `video1.mp4`)। खाली लिस्ट वाला चैनल नहीं चलेगा।
+2. **वीडियो के लिंक** (कितने भी, 5 से ज़्यादा भी): Actions -> **Set Videos** -> Run workflow
+   - `channel`: 1 से 5
+   - `mode`: `add` (जोड़ें) / `replace` (पूरी लिस्ट बदलें) / `clear` (सब हटाएँ)
+   - `links`: YouTube लिंक, कॉमा / space / नई लाइन से अलग करके
+
+   `channels.json` अपने-आप बदलकर commit हो जाती है (चाहें तो उसे हाथ से भी बदल सकते हैं)। नई लिस्ट चल रहे session में नहीं, **अगले session (handoff) से** लागू होती है। तुरंत बदलना हो तो उस चैनल का चल रहा run Cancel करके Live Stream दोबारा चलाएँ। खाली लिस्ट वाला चैनल नहीं चलेगा।
 
 3. **शुरू करना**: Actions -> **Live Stream** -> Run workflow -> `channel = all` (या `1,3`)।
    बाद में Watchdog अपने-आप गिरे हुए चैनल दोबारा उठा देगा।
@@ -35,6 +40,7 @@
 
 ## फ़ाइलें
 - `channels.json` — चैनल और वीडियो की सूची
+- `.github/workflows/set-videos.yml` — Actions से लिंक जोड़ने/बदलने का workflow
 - `live/live.py` — सारा लॉजिक (plan, prepare, handoff, stream, watchdog)
 - `.github/workflows/live-stream.yml` — मुख्य workflow
 - `.github/workflows/watchdog.yml` — हर 30 मिनट की जाँच
