@@ -77,7 +77,10 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: media/ch${{ matrix.channel }}
-          key: live-ch${{ matrix.channel }}-${{ steps.key.outputs.key }}
+          key: live-v2-ch${{ matrix.channel }}-${{ steps.key.outputs.key }}
+          # लिस्ट बदली हो तो भी इस चैनल की पिछली तैयार वीडियो वापस मिलें (दोबारा डाउनलोड न हों)
+          restore-keys: |
+            live-v2-ch${{ matrix.channel }}-
 
       - name: Prepare videos
         if: steps.cache.outputs.cache-hit != 'true'
@@ -88,7 +91,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: media/ch${{ matrix.channel }}
-          key: live-ch${{ matrix.channel }}-${{ steps.key.outputs.key }}
+          key: live-v2-ch${{ matrix.channel }}-${{ steps.key.outputs.key }}
 
       - name: Wait for previous session
         run: python3 live/live.py wait-prev --channel ${{ matrix.channel }}

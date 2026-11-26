@@ -34,7 +34,7 @@ WORKFLOW = "live-stream.yml"
 JOB_BUDGET = 350 * 60          # job शुरू होने के बाद कुल इतना समय इस्तेमाल करेंगे
 MAX_STREAM = 325 * 60          # एक session में ज़्यादा से ज़्यादा इतनी देर stream
 HANDOFF_BEFORE_END = 25 * 60   # session खत्म होने से 25 मिनट पहले अगला session शुरू
-CACHE_VERSION = "v1"
+CACHE_VERSION = "v2"
 END_TOLERANCE = 15              # इतने सेकंड पहले खत्म हुआ तो भी session पूरा मानें
 
 
@@ -256,28 +256,61 @@ def normalize(src, dst):
         raise RuntimeError(f"ffmpeg normalize fail (code {r.returncode})")
 
 
+def video_id(src):
+    """हर वीडियो की स्थायी पहचान (?si= जैसे फ़र्क़ से अलग वीडियो नहीं मानी जाएगी)."""
+    import re
+    m = re.search(r"(?:youtu\.be/|youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|live/|embed/))([\w-]{11})", src)
+    if m:
+        return "yt-" + m.group(1)
+    if src.startswith(("http://", "https://")):
+        key = src.split("#")[0].split("?")[0]
+    else:
+        p = local_path(src)
+        key = f"{src}:{p.stat().st_size if p.exists() else 0}"
+    return "f-" + hashlib.sha1(key.encode()).hexdigest()[:12]
+
+
 def cmd_prepare(a):
     ch = get_channel(a.channel)
     out = MEDIA / f"ch{ch['id']}"
     raw = MEDIA / f"raw{ch['id']}"
-    shutil.rmtree(out, ignore_errors=True)
     shutil.rmtree(raw, ignore_errors=True)
-    out.mkdir(parents=True)
-    ok = 0
+    out.mkdir(parents=True, exist_ok=True)
+    order, reused, fresh = [], 0, 0
+    total = len(ch["videos"])
     for i, src in enumerate(ch["videos"], 1):
+        name = f"{video_id(src)}.mp4"
+        dst = out / name
+        if name in order:
+            log(f"[{i}/{total}] यह वीडियो लिस्ट में दोबारा है, छोड़ी: {src}")
+            continue
+        if dst.exists() and dst.stat().st_size > 1024 * 1024:
+            log(f"[{i}/{total}] पहले से तैयार है (दोबारा डाउनलोड नहीं): {src}")
+            order.append(name)
+            reused += 1
+            continue
         raw.mkdir(parents=True, exist_ok=True)
-        log(f"[{i}/{len(ch['videos'])}] तैयार कर रहा हूँ: {src}")
+        log(f"[{i}/{total}] तैयार कर रहा हूँ: {src}")
         try:
             path = download(src, raw, i)
-            normalize(path, out / f"{i:03d}.mp4")
-            ok += 1
+            tmp = out / f"{name}.tmp.mp4"
+            normalize(path, tmp)
+            tmp.replace(dst)
+            order.append(name)
+            fresh += 1
         except Exception as exc:  # एक वीडियो खराब हो तो बाकी चलती रहें
             log(f"WARNING: वीडियो {i} छोड़ी गई: {exc}")
         finally:
             shutil.rmtree(raw, ignore_errors=True)
-    if ok == 0:
+    if not order:
         sys.exit("ERROR: एक भी वीडियो तैयार नहीं हो पाई.")
-    log(f"Channel {ch['id']}: {ok}/{len(ch['videos'])} वीडियो तैयार.")
+    # लिस्ट से हटाई गई वीडियो की फ़ाइलें साफ़ करें, ताकि cache बढ़ता न जाए
+    for f in out.glob("*.mp4"):
+        if f.name not in order:
+            log(f"लिस्ट में नहीं है, हटाई: {f.name}")
+            f.unlink()
+    (out / "manifest.json").write_text(json.dumps(order), encoding="utf-8")
+    log(f"Channel {ch['id']}: {len(order)}/{total} वीडियो तैयार ({reused} पहले से थीं, {fresh} नई).")
 
 
 # ------------------------------------------------------------------ wait-prev
@@ -325,7 +358,11 @@ def probe_duration(path):
 
 def build_playlist(cid, seconds_needed, name="list.txt"):
     d = MEDIA / f"ch{cid}"
-    files = sorted(d.glob("[0-9][0-9][0-9].mp4"))
+    mf = d / "manifest.json"
+    if mf.exists():
+        files = [d / n for n in json.loads(mf.read_text(encoding="utf-8")) if (d / n).exists()]
+    else:
+        files = sorted(f for f in d.glob("*.mp4") if ".tmp." not in f.name)
     if not files:
         sys.exit(f"ERROR: media/ch{cid} में तैयार वीडियो नहीं हैं.")
     total = sum(probe_duration(f) for f in files)
@@ -363,6 +400,10 @@ def cmd_stream(a):
     for secret in (yt, fb):
         if secret:
             print(f"::add-mask::{secret}", flush=True)
+    for label, secret in (("YouTube", yt), ("Facebook", fb)):
+        if secret and ("/" in secret or "rtmp" in secret.lower() or " " in secret):
+            sys.exit(f"ERROR: {label} की key गलत लग रही है. सिर्फ़ 'Stream key' डालें, "
+                     "Stream URL या पूरा लिंक नहीं (उसमें '/' या 'rtmp' नहीं होना चाहिए).")
 
     if a.dry_run:
         targets = [str(MEDIA / "dry-run.flv")]
@@ -419,7 +460,8 @@ def cmd_stream(a):
                     for other in state.values():
                         if other["proc"] is not None:
                             other["proc"].terminate()
-                    sys.exit(f"ERROR: [{name}] बार-बार connect नहीं हो पा रहा. Stream key / नेटवर्क जाँचें.")
+                    sys.exit(f"ERROR: [{name}] बार-बार connect नहीं हो पा रहा. जाँचें: (1) secret में सिर्फ़ Stream key है और इसी चैनल की है, "
+                             "(2) YouTube Studio -> Go live में live की सुविधा चालू है, (3) उस key की पुरानी stream कहीं और नहीं चल रही.")
                 st["proc"] = launch(i, name, target)
                 st["start"] = time.time()
         if do_handoff and not handed and time.time() >= handoff_at:
