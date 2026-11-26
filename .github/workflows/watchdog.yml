@@ -1,0 +1,27 @@
+name: Live Watchdog
+
+# हर 30 मिनट में देखता है कि कोई चैनल बंद तो नहीं पड़ गया; बंद हो तो उसे दोबारा शुरू कर देता है.
+# रोकना हो तो: Settings -> Secrets and variables -> Actions -> Variables में
+# STREAMING_ENABLED = false रखें (और चल रहे runs को Cancel करें).
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restart missing channels
+        if: vars.STREAMING_ENABLED != 'false'
+        run: python3 live/live.py watchdog

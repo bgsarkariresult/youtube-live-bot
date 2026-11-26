@@ -1,0 +1,10 @@
+{
+  "_help": "हर चैनल की 'videos' लिस्ट में YouTube वीडियो के लिंक डालें (या इसी repo की mp4 फ़ाइल का नाम, जैसे video1.mp4). जिस चैनल की लिस्ट खाली है, उसकी live stream शुरू नहीं होगी. Stream key GitHub Secrets में रहती है: YT_STREAM_KEY_1..5 और FB_STREAM_KEY_1..5",
+  "channels": [
+    { "id": 1, "name": "Channel 1", "videos": [] },
+    { "id": 2, "name": "Channel 2", "videos": [] },
+    { "id": 3, "name": "Channel 3", "videos": [] },
+    { "id": 4, "name": "Channel 4", "videos": [] },
+    { "id": 5, "name": "Channel 5", "videos": [] }
+  ]
+}
