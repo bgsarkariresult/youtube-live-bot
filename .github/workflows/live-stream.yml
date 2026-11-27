@@ -1,8 +1,8 @@
 name: Live Stream
 
 # हर चैनल अपना अलग job है और ~5.5 घंटे stream करता है.
-# खत्म होने से 25 मिनट पहले वह अपना अगला session खुद शुरू करवा देता है (handoff),
-# इसलिए चैनल लगातार चलता रहता है.
+# खत्म होने से 25 मिनट पहले वह अपना अगला session खुद शुरू करवा देता है (handoff).
+# कुल 23 घंटे (Variable STREAM_HOURS से बदलें) पूरे होते ही stream अपने-आप रुक जाती है.
 # शुरू करने के लिए: Actions -> Live Stream -> Run workflow (channel = all)
 
 run-name: "Live: ${{ inputs.channel || 'all' }}"
@@ -15,6 +15,9 @@ on:
         default: "all"
         required: false
       prev_run_id:
+        description: "(handoff के लिए, हाथ से न भरें)"
+        required: false
+      started_at:
         description: "(handoff के लिए, हाथ से न भरें)"
         required: false
 
@@ -50,6 +53,8 @@ jobs:
         channel: ${{ fromJSON(needs.plan.outputs.channels) }}
     env:
       PREV_RUN_ID: ${{ inputs.prev_run_id }}
+      STARTED_AT: ${{ inputs.started_at }}
+      STREAM_HOURS: ${{ vars.STREAM_HOURS }}
       YT_STREAM_KEY: ${{ secrets[format('YT_STREAM_KEY_{0}', matrix.channel)] }}
       FB_STREAM_KEY: ${{ secrets[format('FB_STREAM_KEY_{0}', matrix.channel)] }}
       YT_COOKIES: ${{ secrets.YT_COOKIES }}

@@ -35,6 +35,15 @@ JOB_BUDGET = 350 * 60          # job शुरू होने के बाद 
 MAX_STREAM = 325 * 60          # एक session में ज़्यादा से ज़्यादा इतनी देर stream
 HANDOFF_BEFORE_END = 25 * 60   # session खत्म होने से 25 मिनट पहले अगला session शुरू
 CACHE_VERSION = "v2"
+def total_seconds():
+    """कुल कितनी देर live रहना है (default 23 घंटे; Variable STREAM_HOURS से बदला जा सकता है)."""
+    try:
+        hours = float(os.environ.get("STREAM_HOURS", "").strip() or 23)
+    except ValueError:
+        hours = 23
+    return hours * 3600
+
+
 END_TOLERANCE = 15              # इतने सेकंड पहले खत्म हुआ तो भी session पूरा मानें
 
 
@@ -376,12 +385,13 @@ def build_playlist(cid, seconds_needed, name="list.txt"):
     return lst
 
 
-def handoff(cid):
+def handoff(cid, started_at):
     """अगला 6-घंटे का session अभी शुरू करवाना; वह हमारे खत्म होने तक रुका रहेगा."""
     log("अगला session शुरू करवा रहा हूँ (handoff)...")
     cmd = ["gh", "workflow", "run", WORKFLOW, "-R", repo(),
            "--ref", os.environ.get("GITHUB_REF_NAME", "main"),
-           "-f", f"channel={cid}", "-f", f"prev_run_id={os.environ.get('GITHUB_RUN_ID', '')}"]
+           "-f", f"channel={cid}", "-f", f"prev_run_id={os.environ.get('GITHUB_RUN_ID', '')}",
+           "-f", f"started_at={int(started_at)}"]
     for _ in range(5):
         r = run(cmd, capture_output=True)
         if r.returncode == 0:
@@ -389,7 +399,7 @@ def handoff(cid):
             return True
         log(f"handoff fail: {(r.stderr or '').strip()}")
         time.sleep(15)
-    log("WARNING: handoff नहीं हो पाया; watchdog (अगर चालू है) दोबारा शुरू कर देगा.")
+    log("WARNING: handoff नहीं हो पाया; यह run fail दिखेगा और watchdog (अगर चालू है) दोबारा शुरू कर देगा.")
     return False
 
 
@@ -421,14 +431,33 @@ def cmd_stream(a):
 
     now = time.time()
     job_start = float(os.environ.get("LIVE_JOB_START") or now)
-    remaining = min(MAX_STREAM, job_start + JOB_BUDGET - now)
+    try:
+        started_at = float(os.environ.get("STARTED_AT", "").strip() or now)
+    except ValueError:
+        started_at = now
+    chain_end = started_at + total_seconds()
+    if chain_end - now < 60:
+        log(f"कुल {total_seconds()/3600:g} घंटे की live पूरी हो चुकी है. अब stream नहीं होगी, "
+            "यह चैनल यहीं रुक गया.")
+        return
+    session_remaining = min(MAX_STREAM, job_start + JOB_BUDGET - now)
+    last_session = (chain_end - now) <= session_remaining + 60
+    remaining = min(session_remaining, chain_end - now)
     if a.duration:
         remaining = float(a.duration)
+        last_session = True
     end_at = now + remaining
-    do_handoff = (not a.no_handoff) and remaining > HANDOFF_BEFORE_END + 300
-    handoff_at = end_at - HANDOFF_BEFORE_END
+    do_handoff = (not a.no_handoff) and not last_session
+    handoff_at = min(max(now + 30, end_at - HANDOFF_BEFORE_END), end_at - END_TOLERANCE - 5)
     handed = False
+    handoff_ok = False
+    done_at = time.strftime("%H:%M", time.gmtime(chain_end + 5.5 * 3600))
     log(f"Channel {cid} -> {', '.join(names)} | इस session में {remaining/60:.0f} मिनट stream होगी")
+    if last_session:
+        log(f"यह आख़िरी session है: कुल {total_seconds()/3600:g} घंटे पूरे होने पर (भारतीय समय लगभग {done_at}) "
+            "stream अपने-आप रुक जाएगी और दोबारा शुरू नहीं होगी.")
+    else:
+        log(f"कुल {total_seconds()/3600:g} घंटे की live है; आगे के session अपने-आप जुड़ते जाएँगे.")
 
     # हर platform के लिए अलग ffmpeg process: एक की stream टूटे तो दूसरी पर असर नहीं पड़ता.
     state = {n: {"proc": None, "start": 0.0, "fails": 0, "retry_at": 0.0, "id": i}
@@ -465,7 +494,8 @@ def cmd_stream(a):
                 st["proc"] = launch(i, name, target)
                 st["start"] = time.time()
         if do_handoff and not handed and time.time() >= handoff_at:
-            handed = handoff(cid) or True
+            handed = True
+            handoff_ok = handoff(cid, started_at)
         time.sleep(2)
 
     for st in state.values():  # -t की वजह से अपने-आप रुकते हैं; थोड़ा इंतज़ार करके बंद करें
@@ -475,6 +505,10 @@ def cmd_stream(a):
             except subprocess.TimeoutExpired:
                 st["proc"].terminate()
 
+    if do_handoff and not handoff_ok:  # आख़िरी मौका
+        handoff_ok = handoff(cid, started_at)
+    if do_handoff and not handoff_ok:
+        sys.exit("ERROR: अगला session शुरू नहीं हो पाया; यह run fail माना जाएगा ताकि watchdog चैनल दोबारा उठाए.")
     log("Session पूरा हुआ.")
 
 
@@ -521,7 +555,32 @@ def cmd_set_videos(a):
 
 # ------------------------------------------------------------------ watchdog
 
+def last_outcome(cid):
+    """चैनल के सबसे नए पूरे हुए run का नतीजा: success / failure / cancelled / None"""
+    r = gh(["run", "list", "--workflow", WORKFLOW, "--status", "completed",
+            "--json", "databaseId,displayTitle", "--limit", "30"])
+    if r.returncode != 0:
+        return None
+    try:
+        runs = json.loads(r.stdout or "[]")
+    except ValueError:
+        return None
+    jq = f'[.jobs[] | select(.name=="Channel {cid}") | .conclusion] | first // ""'
+    for item in runs:  # नए से पुराने
+        cov = title_covers(item["displayTitle"])
+        if cov is not None and cid not in cov:
+            continue
+        j = run(["gh", "api", f"repos/{repo()}/actions/runs/{item['databaseId']}/jobs?per_page=100",
+                 "--jq", jq], capture_output=True)
+        out = (j.stdout or "").strip()
+        if j.returncode == 0 and out:
+            return out
+    return None
+
+
 def cmd_watchdog(a):
+    """सिर्फ़ उन चैनल को दोबारा उठाता है जिनका पिछला session fail हुआ.
+    जो चैनल 23 घंटे पूरे करके सफलता से रुका, या जिसे आपने Cancel किया, उसे दोबारा शुरू नहीं करता."""
     covered = set()
     for _, title in active_titles().items():
         cov = title_covers(title)
@@ -532,7 +591,11 @@ def cmd_watchdog(a):
     for ch in sorted(load_channels().values(), key=lambda c: c["id"]):
         if not ch["videos"] or ch["id"] in covered:
             continue
-        log(f"Channel {ch['id']} नहीं चल रहा; शुरू कर रहा हूँ.")
+        outcome = last_outcome(ch["id"])
+        if outcome != "failure":
+            log(f"Channel {ch['id']}: पिछला नतीजा '{outcome or 'कोई run नहीं'}', इसलिए दोबारा शुरू नहीं कर रहा.")
+            continue
+        log(f"Channel {ch['id']} का पिछला session fail हुआ था; दोबारा शुरू कर रहा हूँ.")
         r = gh(["workflow", "run", WORKFLOW, "--ref", os.environ.get("GITHUB_REF_NAME", "main"),
                 "-f", f"channel={ch['id']}"])
         if r.returncode != 0:
